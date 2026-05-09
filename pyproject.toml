@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyx"
+version = "0.1.0"
+description = "Bundle Dart/Flutter test files with transitive deps — no repo credentials needed"
+requires-python = ">=3.11"
+
+[project.scripts]
+pyx = "pyx.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pyx*"]

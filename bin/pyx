@@ -1,0 +1,11 @@
+#!/usr/bin/env sh
+# Resolve symlinks to find the real script, then derive the project root from it.
+SCRIPT="$0"
+while [ -L "$SCRIPT" ]; do
+    LINK="$(readlink "$SCRIPT")"
+    case "$LINK" in
+        /*) SCRIPT="$LINK" ;;
+        *)  SCRIPT="$(dirname "$SCRIPT")/$LINK" ;;
+    esac
+done
+PYTHONPATH="$(cd "$(dirname "$SCRIPT")/.." && pwd)" exec python3 -m pyx.cli "$@"
