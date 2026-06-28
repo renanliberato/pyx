@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 import argparse
+import subprocess
 import sys
 from pathlib import Path
 from typing import Protocol, runtime_checkable
@@ -257,15 +258,17 @@ def cmd_bundle(args: argparse.Namespace) -> int:
 
     # Run verification if requested
     if args.verify:
-        import subprocess
         print("\nVerifying bundle...")
         for cmd in result.manifest.run_commands:
-            cmd_list = cmd["command"]
-            cwd = result.output_dir / cmd["cwd"] if cmd["cwd"] else result.output_dir
+            cmd_list = cmd.command
+            cwd = result.output_dir / cmd.cwd if cmd.cwd else result.output_dir
             try:
                 subprocess.run(cmd_list, cwd=cwd, check=True)
             except subprocess.CalledProcessError as e:
                 print(f"pyx: verification failed: {' '.join(cmd_list)}", file=sys.stderr)
+                return 1
+            except FileNotFoundError as e:
+                print(f"pyx: verification command not found: {cmd_list[0]}", file=sys.stderr)
                 return 1
 
     return 0
