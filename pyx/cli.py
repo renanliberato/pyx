@@ -8,7 +8,7 @@ from typing import Protocol, runtime_checkable
 
 from .domain import BundleRequest, LanguageAdapter, RunCommand, Diagnostic, DiagnosticSeverity
 from .config import PyxConfig
-from .adapters import DartAdapter
+from .adapters import DartAdapter, CsharpAdapter
 
 
 @runtime_checkable
@@ -26,13 +26,70 @@ def _detect_project_root(start: Path) -> Path:
 
 
 def _detect_language(files: list[Path]) -> str | None:
-    """Detect language from file extensions."""
-    extensions = {f.suffix.lower() for f in files if f.suffix}
-    if ".dart" in extensions:
+    """Detect language from file extensions.
+
+    Returns:
+        The detected language ('dart' or 'csharp'), or None if no recognized extension found.
+
+    Raises:
+        ValueError: If mixed Dart/C# inputs are detected.
+    """
+    # Collect extensions from files and directory contents
+    extensions: set[str] = set()
+
+    for f in files:
+        if f.is_file() and f.suffix:
+            extensions.add(f.suffix.lower())
+        elif f.is_dir():
+            # Check directory contents for recognized extensions
+            for ext in [".dart", ".cs"]:
+                if list(f.rglob(f"*{ext}")):
+                    extensions.add(ext)
+
+    # Check for mixed languages
+    has_dart = ".dart" in extensions
+    has_csharp = ".cs" in extensions
+
+    if has_dart and has_csharp:
+        raise ValueError(
+            "Mixed Dart/C# inputs are not supported in a single bundle. "
+            "Please bundle Dart and C# files separately."
+        )
+
+    if has_dart:
         return "dart"
-    if ".cs" in extensions:
+    if has_csharp:
         return "csharp"
+
     return None
+
+
+def _check_unsupported_extensions(files: list[Path], language: str) -> None:
+    """Check for unsupported file extensions.
+
+    Raises:
+        ValueError: If unsupported extensions are found.
+    """
+    supported_exts = {".dart"} if language == "dart" else {".cs"}
+    unsupported: set[str] = set()
+
+    for f in files:
+        if f.is_file() and f.suffix:
+            ext = f.suffix.lower()
+            if ext not in supported_exts:
+                unsupported.add(ext)
+
+    if unsupported:
+        ext_list = ", ".join(sorted(unsupported))
+        guidance = (
+            "Dart files should have .dart extension. "
+            if language == "dart"
+            else "C# files should have .cs extension. "
+        )
+        raise ValueError(
+            f"Unsupported file extension(s) for {language} bundle: {ext_list}. "
+            f"{guidance}"
+        )
 
 
 def _get_adapter(language: str, cfg: PyxConfig) -> LanguageAdapter:
@@ -41,6 +98,10 @@ def _get_adapter(language: str, cfg: PyxConfig) -> LanguageAdapter:
         return DartAdapter(
             pub_cache=cfg.adapters.dart.pub_cache,
             redact_packages=cfg.adapters.dart.redact_packages,
+        )
+    elif language == "csharp":
+        return CsharpAdapter(
+            extractor=cfg.adapters.csharp.extractor,
         )
     raise ValueError(f"Unsupported language: {language}")
 
@@ -112,11 +173,34 @@ def cmd_bundle(args: argparse.Namespace) -> int:
     # Detect or select language
     language = args.language if args.language != "auto" else cfg.language
     if language == "auto":
-        detected = _detect_language(input_paths)
-        if not detected:
-            print("pyx: could not detect language from inputs", file=sys.stderr)
+        try:
+            detected = _detect_language(input_paths)
+            if not detected:
+                print(
+                    "pyx: could not detect language from inputs. "
+                    "Supported extensions: .dart (Dart), .cs (C#). "
+                    "Use --language dart|csharp to specify explicitly.",
+                    file=sys.stderr,
+                )
+                return 1
+            language = detected
+        except ValueError as e:
+            print(f"pyx: {e}", file=sys.stderr)
             return 1
-        language = detected
+    else:
+        # For explicit language, check for mixed inputs
+        try:
+            _detect_language(input_paths)
+        except ValueError as e:
+            print(f"pyx: {e}", file=sys.stderr)
+            return 1
+
+    # Check for unsupported extensions
+    try:
+        _check_unsupported_extensions(input_paths, language)
+    except ValueError as e:
+        print(f"pyx: {e}", file=sys.stderr)
+        return 1
 
     # Discover seeds
     seeds = _discover_seeds(input_paths, language)
