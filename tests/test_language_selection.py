@@ -104,9 +104,9 @@ def test_explicit_language_csharp(csharp_project_with_files: Path, tmp_path: Pat
         cwd=csharp_project_with_files,
     )
 
-    # Should fail because C# is not yet implemented
+    # Should fail because C# extractor is not found
     assert result.returncode == 1
-    assert "C# bundling is not yet implemented" in result.stderr
+    assert "C# extractor not found" in result.stderr
 
 
 def test_auto_detect_dart(dart_project_with_files: Path, tmp_path: Path) -> None:
@@ -129,9 +129,9 @@ def test_auto_detect_csharp(csharp_project_with_files: Path, tmp_path: Path) -> 
         cwd=csharp_project_with_files,
     )
 
-    # Should fail because C# is not yet implemented, but should detect it
+    # Should fail because C# extractor is not found, but should detect it
     assert result.returncode == 1
-    assert "C# bundling is not yet implemented" in result.stderr
+    assert "C# extractor not found" in result.stderr
 
 
 def test_mixed_dart_csharp_files(dart_project_with_files: Path, csharp_project_with_files: Path, tmp_path: Path) -> None:
@@ -234,9 +234,9 @@ def test_directory_discovery_csharp(csharp_project_with_files: Path, tmp_path: P
         cwd=csharp_project_with_files,
     )
 
-    # Should fail because C# is not yet implemented, but should discover the files
+    # Should fail because C# extractor is not found, but should discover the files
     assert result.returncode == 1
-    assert "C# bundling is not yet implemented" in result.stderr
+    assert "C# extractor not found" in result.stderr
 
 
 def test_directory_discovery_auto_dart(dart_project_with_files: Path, tmp_path: Path) -> None:
@@ -259,9 +259,9 @@ def test_directory_discovery_auto_csharp(csharp_project_with_files: Path, tmp_pa
         cwd=csharp_project_with_files,
     )
 
-    # Should fail because C# is not yet implemented, but should discover and detect the files
+    # Should fail because C# extractor is not found, but should discover and detect the files
     assert result.returncode == 1
-    assert "C# bundling is not yet implemented" in result.stderr
+    assert "C# extractor not found" in result.stderr
 
 
 def test_mixed_directory_contents(tmp_path: Path) -> None:
