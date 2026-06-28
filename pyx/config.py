@@ -86,14 +86,12 @@ class PyxConfig:
                 csharp_block = csharp_block_match.group(1)
                 if v := re.search(r"extractor:\s*(.+)", csharp_block):
                     cfg.adapters.csharp.extractor = Path(v.group(1).strip()).expanduser()
-
-        # Support legacy top-level config for backward migration
-        # Note: This is temporary migration path, new config shape is preferred
-        if not adapters_block:
-            if v := scalar("pub_cache"):
-                cfg.adapters.dart.pub_cache = Path(v).expanduser()
-            cfg.adapters.dart.redact_packages = list_val("redact_packages")
-            cfg.adapters.dart.bundle_from_source = list_val("bundle_from_source")
+        elif config_path.exists():
+            # Config file exists but has no adapters section - this is an error
+            raise ValueError(
+                "Invalid .pyx.yaml: missing 'adapters' section. "
+                "Config must use the adapter-based shape. See `pyx init` for an example."
+            )
 
         return cfg
 

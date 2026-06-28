@@ -183,3 +183,19 @@ def test_init_with_force(tmp_path: Path) -> None:
     config = config_path.read_text()
     assert "# old config" not in config
     assert "adapters:" in config
+
+
+def test_bundle_with_invalid_config(dart_fixture_project: Path) -> None:
+    """Test that bundling with invalid config (missing adapters section) fails with clear error."""
+    # Create a config file without the adapters section
+    config_path = dart_fixture_project / ".pyx.yaml"
+    config_path.write_text("""\
+output_dir: tmp/pyx-bundle
+language: auto
+""")
+
+    result = run_pyx(["bundle", "test/simple_test.dart"], cwd=dart_fixture_project)
+
+    assert result.returncode == 1
+    assert "missing 'adapters' section" in result.stderr
+    assert "adapter-based shape" in result.stderr
