@@ -7,16 +7,32 @@ from dataclasses import dataclass, field
 
 
 @dataclass
-class PyxConfig:
-    # Where to write the bundle
-    output_dir: Path = Path("tmp/pyx-bundle")
-    # Pub cache root (default: ~/.pub-cache)
+class DartConfig:
+    """Dart adapter configuration."""
     pub_cache: Path = field(default_factory=lambda: Path.home() / ".pub-cache")
-    # Extra packages to always bundle from source even if pub.dev would suffice
-    bundle_from_source: list[str] = field(default_factory=list)
-    # Package names to strip from the generated pubspec entirely
-    # (source is bundled, but the name never appears in output pubspec or logs)
     redact_packages: list[str] = field(default_factory=list)
+    bundle_from_source: list[str] = field(default_factory=list)
+
+
+@dataclass
+class CsharpConfig:
+    """C# adapter configuration."""
+    extractor: Path = Path("vendor/chsarp-class-context/bin/chsarp-class-context")
+
+
+@dataclass
+class AdaptersConfig:
+    """Adapter-specific configurations."""
+    dart: DartConfig = field(default_factory=DartConfig)
+    csharp: CsharpConfig = field(default_factory=CsharpConfig)
+
+
+@dataclass
+class PyxConfig:
+    """pyx project configuration."""
+    output_dir: Path = Path("tmp/pyx-bundle")
+    language: str = "auto"  # auto | dart | csharp
+    adapters: AdaptersConfig = field(default_factory=AdaptersConfig)
 
     @classmethod
     def load(cls, project_root: Path) -> "PyxConfig":
@@ -43,11 +59,54 @@ class PyxConfig:
                         for l in m.group(1).splitlines() if l.strip()]
             return []
 
+        def block(key: str) -> str | None:
+            m = re.search(rf"^{key}:\s*\n((?:[ \t]+.+\n?)+)", text, re.MULTILINE)
+            return m.group(1).rstrip() if m else None
+
         if v := scalar("output_dir"):
             cfg.output_dir = Path(v).expanduser()
-        if v := scalar("pub_cache"):
-            cfg.pub_cache = Path(v).expanduser()
+        if v := scalar("language"):
+            cfg.language = v
 
-        cfg.bundle_from_source = list_val("bundle_from_source")
-        cfg.redact_packages = list_val("redact_packages")
+        # Parse adapters section
+        adapters_block = block("adapters")
+        if adapters_block:
+            # Dart config
+            dart_block_match = re.search(r"dart:\s*\n((?:[ \t]+.+\n?)+)", adapters_block, re.MULTILINE)
+            if dart_block_match:
+                dart_block = dart_block_match.group(1)
+                if v := re.search(r"pub_cache:\s*(.+)", dart_block):
+                    cfg.adapters.dart.pub_cache = Path(v.group(1).strip()).expanduser()
+                cfg.adapters.dart.redact_packages = _extract_list_from_block(dart_block, "redact_packages")
+                cfg.adapters.dart.bundle_from_source = _extract_list_from_block(dart_block, "bundle_from_source")
+
+            # C# config
+            csharp_block_match = re.search(r"csharp:\s*\n((?:[ \t]+.+\n?)+)", adapters_block, re.MULTILINE)
+            if csharp_block_match:
+                csharp_block = csharp_block_match.group(1)
+                if v := re.search(r"extractor:\s*(.+)", csharp_block):
+                    cfg.adapters.csharp.extractor = Path(v.group(1).strip()).expanduser()
+
+        # Support legacy top-level config for backward migration
+        # Note: This is temporary migration path, new config shape is preferred
+        if not adapters_block:
+            if v := scalar("pub_cache"):
+                cfg.adapters.dart.pub_cache = Path(v).expanduser()
+            cfg.adapters.dart.redact_packages = list_val("redact_packages")
+            cfg.adapters.dart.bundle_from_source = list_val("bundle_from_source")
+
         return cfg
+
+
+def _extract_list_from_block(block: str, key: str) -> list[str]:
+    """Extract a list value from a config block."""
+    # Inline: key: [a, b, c]
+    m = re.search(rf"{key}:\s*\[([^\]]*)\]", block, re.MULTILINE)
+    if m:
+        return [x.strip().strip("\"'") for x in m.group(1).split(",") if x.strip()]
+    # Block list: key:\n    - a\n    - b
+    m = re.search(rf"{key}:\s*\n((?:[ \t]+-\s+.+\n?)+)", block, re.MULTILINE)
+    if m:
+        return [re.sub(r"^\s*-\s*", "", l).strip().strip("\"'")
+                for l in m.group(1).splitlines() if l.strip()]
+    return []

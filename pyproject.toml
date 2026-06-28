@@ -8,9 +8,16 @@ version = "0.1.0"
 description = "Bundle Dart/Flutter test files with transitive deps — no repo credentials needed"
 requires-python = ">=3.11"
 
+[project.optional-dependencies]
+test = ["pytest>=7.0"]
+
 [project.scripts]
 pyx = "pyx.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["pyx*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
